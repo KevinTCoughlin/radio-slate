@@ -1,23 +1,37 @@
-use std::process::Command;
+use std::{
+    process::{Child, Command},
+    sync::Mutex,
+};
 
-use crate::domain::{PlaybackState, Station};
+use crate::domain::{PlaybackError, Station};
 
 pub trait AudioPlayback {
-    fn play_station(&self, station: &Station) -> anyhow::Result<()>;
-    fn status_label(&self, state: PlaybackState) -> &'static str;
+    fn play_station(&self, station: &Station) -> Result<(), PlaybackError>;
+    fn stop_playback(&self) -> Result<(), PlaybackError>;
 }
 
-#[derive(Default)]
-pub struct HttpAudioPlayer;
+pub struct HttpAudioPlayer {
+    active_child: Mutex<Option<Child>>,
+}
 
 impl HttpAudioPlayer {
     pub fn new() -> Self {
-        Self
+        Self::default()
+    }
+}
+
+impl Default for HttpAudioPlayer {
+    fn default() -> Self {
+        Self {
+            active_child: Mutex::new(None),
+        }
     }
 }
 
 impl AudioPlayback for HttpAudioPlayer {
-    fn play_station(&self, station: &Station) -> anyhow::Result<()> {
+    fn play_station(&self, station: &Station) -> Result<(), PlaybackError> {
+        self.stop_playback()?;
+
         let mpv = Command::new("mpv")
             .args([
                 "--no-video",
@@ -29,7 +43,10 @@ impl AudioPlayback for HttpAudioPlayer {
             .spawn();
 
         match mpv {
-            Ok(_) => Ok(()),
+            Ok(child) => {
+                self.active_child.lock().unwrap().replace(child);
+                Ok(())
+            }
             Err(_) => {
                 let ffplay = Command::new("ffplay")
                     .args([
@@ -43,20 +60,23 @@ impl AudioPlayback for HttpAudioPlayer {
                     .spawn();
 
                 match ffplay {
-                    Ok(_) => Ok(()),
-                    Err(error) => Err(anyhow::anyhow!(
+                    Ok(child) => {
+                        self.active_child.lock().unwrap().replace(child);
+                        Ok(())
+                    }
+                    Err(error) => Err(PlaybackError::PlayerUnavailable(format!(
                         "failed to start audio player (mpv/ffplay): {error}"
-                    )),
+                    ))),
                 }
             }
         }
     }
 
-    fn status_label(&self, state: PlaybackState) -> &'static str {
-        match state {
-            PlaybackState::Stopped => "stopped",
-            PlaybackState::Playing => "playing",
-            PlaybackState::Buffering => "buffering",
+    fn stop_playback(&self) -> Result<(), PlaybackError> {
+        if let Some(mut child) = self.active_child.lock().unwrap().take() {
+            let _ = child.kill();
+            let _ = child.wait();
         }
+        Ok(())
     }
 }
