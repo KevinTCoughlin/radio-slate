@@ -1,0 +1,17 @@
+{
+  "formatOnSave": true,
+  "formatter": "language_server",
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "checkOnSave": true,
+        "check": {
+          "command": "clippy"
+        },
+        "cargo": {
+          "features": "all"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+[package]
+name = "radio-slate"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+description = "Fresh local Rust radio player scaffold for Linux desktop development"
+license = "MIT"
+repository = "https://github.com/kevintcoughlin/radio-slate"
+homepage = "https://github.com/kevintcoughlin/radio-slate"
+documentation = "https://github.com/kevintcoughlin/radio-slate"
+exclude = ["build", ".zed"]
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+gtk = { version = "0.18.2", features = ["v3_24"] }
+libappindicator = "0.9"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
