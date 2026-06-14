@@ -28,6 +28,10 @@ cargo run -- --tray
 ```
 
 The tray path uses the local AppIndicator/GTK menu for toggling playback and quitting the app.
+It also supports lightweight local desktop notifications (`notify-send` when available),
+shows station metadata with safe fallback labels, and accepts keyboard/media shortcuts:
+- play/pause: `Space`, `P`, `K`, `XF86AudioPlay`, `XF86AudioPause`
+- next station: `N`, `XF86AudioNext`
 
 ## Local install
 
