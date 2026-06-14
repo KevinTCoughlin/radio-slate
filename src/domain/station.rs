@@ -23,6 +23,12 @@ impl AsRef<str> for StationId {
     }
 }
 
+impl std::fmt::Display for StationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackState {
     Stopped,
@@ -63,7 +69,7 @@ impl Station {
 
 #[cfg(test)]
 mod tests {
-    use super::Station;
+    use super::{Station, StationId};
 
     #[test]
     fn station_rejects_invalid_input() {
@@ -75,5 +81,22 @@ mod tests {
         let station = Station::new("Echo", "https://example.test/stream", "news").unwrap();
         assert_eq!(station.genre, "news");
         assert_eq!(station.url, "https://example.test/stream");
+    }
+
+    #[test]
+    fn station_id_display_matches_inner_value() {
+        let id = StationId::new("station-echo");
+        assert_eq!(id.to_string(), "station-echo");
+    }
+
+    #[test]
+    fn station_id_derived_from_name() {
+        let station = Station::new("My Jazz", "https://example.test/stream", "jazz").unwrap();
+        assert_eq!(station.id.to_string(), "station-my-jazz");
+    }
+
+    #[test]
+    fn station_rejects_non_http_url() {
+        assert!(Station::new("Bad", "ftp://example.test/stream", "rock").is_err());
     }
 }
