@@ -7,23 +7,28 @@ pub trait AudioPlayback {
     fn status_label(&self, state: PlaybackState) -> &'static str;
 }
 
-#[derive(Default)]
-pub struct HttpAudioPlayer;
+pub struct HttpAudioPlayer {
+    volume_percent: u8,
+}
 
 impl HttpAudioPlayer {
-    pub fn new() -> Self {
-        Self
+    pub fn new(volume_percent: u8) -> Self {
+        Self {
+            volume_percent: volume_percent.min(100),
+        }
     }
 }
 
 impl AudioPlayback for HttpAudioPlayer {
     fn play_station(&self, station: &Station) -> anyhow::Result<()> {
+        let volume = self.volume_percent.to_string();
+        let mpv_volume = format!("--volume={volume}");
         let mpv = Command::new("mpv")
             .args([
                 "--no-video",
                 "--really-quiet",
                 "--no-terminal",
-                "--volume=70",
+                mpv_volume.as_str(),
                 &station.url,
             ])
             .spawn();
@@ -38,6 +43,8 @@ impl AudioPlayback for HttpAudioPlayer {
                         "-vn",
                         "-loglevel",
                         "quiet",
+                        "-volume",
+                        &volume,
                         &station.url,
                     ])
                     .spawn();
