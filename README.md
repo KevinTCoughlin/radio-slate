@@ -27,7 +27,7 @@ cargo run -- --tray
 ~/.cargo/bin/radio-slate --tray
 ```
 
-The tray path uses the local AppIndicator/GTK menu for toggling playback and quitting the app.
+The tray path uses the local AppIndicator/GTK menu as a thin adapter over the same playback service used by the CLI.
 
 ## Local install
 

@@ -2,7 +2,7 @@ use clap::{Parser, ValueEnum};
 use serde_json::json;
 
 use crate::application::PlaybackService;
-use crate::domain::{PlaybackState, Station};
+use crate::domain::Station;
 use crate::infrastructure::{HttpAudioPlayer, InMemoryStationRepository};
 use crate::ui::run_tray;
 
@@ -47,13 +47,15 @@ pub fn run() {
     let seed = vec![Station::new("KEXP", DEFAULT_STATION_URL, "eclectic").unwrap()];
     let repository = InMemoryStationRepository::with_seed_stations(seed);
     let player = HttpAudioPlayer::new();
-    let service = PlaybackService::new(repository, player);
+    let mut service = PlaybackService::new(repository, player);
+    let default_selection = service.select_default_station().ok();
 
     if args.format == OutputFormat::Json {
         let payload = json!({
             "ready": true,
             "stations": service.list_stations(),
-            "default_playback_state": service.status_label(PlaybackState::Stopped),
+            "default_station_selected": default_selection.is_some(),
+            "default_playback_state": service.status_label(),
             "play_requested": args.play,
             "list_requested": args.list,
             "status_requested": args.status,
@@ -62,10 +64,7 @@ pub fn run() {
     } else {
         println!("radio-slate ready");
         println!("available stations: {}", service.list_stations().len());
-        println!(
-            "default playback state: {}",
-            service.status_label(PlaybackState::Stopped)
-        );
+        println!("default playback state: {}", service.status_label());
     }
 
     if args.list {
@@ -83,19 +82,19 @@ pub fn run() {
         if args.format == OutputFormat::Json {
             println!(
                 "{}",
-                serde_json::to_string_pretty(
-                    &json!({"status": service.status_label(PlaybackState::Stopped)})
-                )
-                .unwrap()
+                serde_json::to_string_pretty(&json!({"status": service.status_label()})).unwrap()
             );
         } else {
-            println!("status: {}", service.status_label(PlaybackState::Stopped));
+            println!("status: {}", service.status_label());
         }
     }
 
     if args.play {
-        let station = service.list_stations().into_iter().next().unwrap();
-        if let Err(error) = service.play_station(&station) {
+        if default_selection.is_none() {
+            eprintln!("playback failed: no stations configured");
+            std::process::exit(1);
+        }
+        if let Err(error) = service.play_selected() {
             eprintln!("playback failed: {error}");
             std::process::exit(1);
         }
