@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.96"
 description = "Fresh local Rust radio player scaffold for Linux desktop development"
+readme = "README.md"
 license = "MIT"
 repository = "https://github.com/kevintcoughlin/radio-slate"
 homepage = "https://github.com/kevintcoughlin/radio-slate"
-documentation = "https://github.com/kevintcoughlin/radio-slate"
-exclude = ["build", ".zed"]
+documentation = "https://docs.rs/radio-slate"
+keywords = ["radio", "audio", "linux", "tray"]
+categories = ["command-line-utilities", "multimedia::audio"]
+include = ["/Cargo.lock", "/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
 anyhow = "1.0"

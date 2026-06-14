@@ -13,6 +13,13 @@ clippy:
 test:
     cargo test
 
+package:
+    cargo package --locked
+
+verify-release:
+    cargo install --path . --locked --root /tmp/radio-slate-install
+    /tmp/radio-slate-install/bin/radio-slate --list --format json
+
 run:
     cargo run -- --play
 
