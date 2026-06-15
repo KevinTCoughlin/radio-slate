@@ -32,6 +32,9 @@ install:
 install-fedora:
     bash scripts/install-fedora.sh
 
+install-steamos:
+    bash scripts/install-steamos.sh
+
 container-build:
     podman build -t radio-slate .
 

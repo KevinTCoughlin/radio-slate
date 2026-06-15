@@ -52,6 +52,40 @@ When tray mode starts, radio-slate registers itself on the session D-Bus as
 The MPRIS service starts gracefully and falls back to tray-only mode when no
 session D-Bus is available (SSH sessions, headless CI, etc.).
 
+### Steam Deck / SteamOS Desktop Mode
+
+Steam Deck support currently targets **Desktop Mode**.
+
+- The existing MPRIS service is the primary integration surface on SteamOS, so
+  KDE media controls, `playerctl`, and other MPRIS-aware clients can control
+  playback once tray mode is running.
+- Game Mode is not yet a first-class UI target because it does not reliably
+  expose the GTK/AppIndicator tray surface used by the current app.
+- The CLI snapshot/output path can serve as a future machine-readable interface
+  for a Decky Loader plugin or other Steam Deck-specific frontend.
+
+Install for Desktop Mode with:
+
+```sh
+bash scripts/install-steamos.sh
+```
+
+This expects Cargo plus either `mpv` or `ffplay` to already be available in
+Desktop Mode. It installs the binary with Cargo and writes a desktop launcher
+to:
+
+- `~/.local/share/applications/radio-slate.desktop`
+
+To also start the tray automatically on login:
+
+```sh
+bash scripts/install-steamos.sh --enable-autostart
+```
+
+That additionally writes:
+
+- `~/.config/autostart/radio-slate.desktop`
+
 ### Desktop notifications
 
 A brief `libnotify`-style desktop notification is sent whenever playback starts

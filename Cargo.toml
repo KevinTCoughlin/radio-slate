@@ -11,7 +11,15 @@ homepage = "https://github.com/kevintcoughlin/radio-slate"
 documentation = "https://docs.rs/radio-slate"
 keywords = ["radio", "audio", "linux", "tray"]
 categories = ["command-line-utilities", "multimedia::audio"]
-include = ["/Cargo.lock", "/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
+include = [
+    "/Cargo.lock",
+    "/Cargo.toml",
+    "/LICENSE",
+    "/README.md",
+    "/assets/**",
+    "/scripts/**",
+    "/src/**",
+]
 
 [dependencies]
 anyhow = "1.0"
