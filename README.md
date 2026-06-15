@@ -27,7 +27,15 @@ cargo run -- --tray
 ~/.cargo/bin/radio-slate --tray
 ```
 
-The tray path uses the local AppIndicator/GTK menu as a thin adapter over the same playback service used by the CLI.
+The tray path uses the local AppIndicator/GTK menu for toggling playback and quitting the app.
+It attempts playback with `mpv` first and falls back to `ffplay` if `mpv` is unavailable.
+
+### Runtime dependencies (Linux)
+
+- GTK 3 and AppIndicator development/runtime libraries (`gtk+-3.0`, `libappindicator3`)
+- At least one supported player on your `PATH`:
+  - `mpv` (preferred)
+  - `ffplay` (fallback)
 
 ## Local install
 
