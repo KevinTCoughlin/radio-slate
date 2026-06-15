@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use clap::{Parser, ValueEnum};
 use serde_json::json;
 
 use crate::application::PlaybackService;
 use crate::domain::{PlaybackState, Station};
-use crate::infrastructure::{HttpAudioPlayer, InMemoryStationRepository};
+use crate::infrastructure::{FileSink, HttpAudioPlayer, InMemoryStationRepository, StdoutSink};
 use crate::ui::run_tray;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -29,6 +31,10 @@ struct CliArgs {
 
     #[arg(long, default_value_t = false)]
     tray: bool,
+
+    /// Write a JSON playback snapshot to this file path instead of stdout.
+    #[arg(long)]
+    output: Option<PathBuf>,
 }
 
 const DEFAULT_STATION_URL: &str = "http://live-mp3-128.kexp.org/kexp128.mp3";
@@ -48,6 +54,24 @@ pub fn run() {
     let repository = InMemoryStationRepository::with_seed_stations(seed);
     let player = HttpAudioPlayer::new();
     let service = PlaybackService::new(repository, player);
+
+    if let Some(ref output_path) = args.output {
+        match FileSink::create(output_path) {
+            Ok(mut sink) => {
+                if let Err(error) =
+                    service.emit_snapshot(PlaybackState::Stopped, None, &mut sink)
+                {
+                    eprintln!("failed to write output snapshot: {error}");
+                    std::process::exit(1);
+                }
+            }
+            Err(error) => {
+                eprintln!("failed to open output file: {error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
 
     if args.format == OutputFormat::Json {
         let payload = json!({
@@ -98,6 +122,15 @@ pub fn run() {
         if let Err(error) = service.play_station(&station) {
             eprintln!("playback failed: {error}");
             std::process::exit(1);
+        }
+    }
+
+    if args.status || args.list || args.play {
+        let mut sink = StdoutSink::new();
+        if let Err(error) =
+            service.emit_snapshot(PlaybackState::Stopped, None, &mut sink)
+        {
+            eprintln!("failed to emit snapshot: {error}");
         }
     }
 }
