@@ -1207,11 +1207,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "glib",
  "gtk",
  "libappindicator",
  "notify-rust",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "zbus",
 ]

@@ -54,7 +54,10 @@ mod tests {
     #[test]
     fn now_playing_body_contains_station_name() {
         let body = now_playing_body("KEXP");
-        assert!(body.contains("KEXP"), "body should mention the station name");
+        assert!(
+            body.contains("KEXP"),
+            "body should mention the station name"
+        );
     }
 
     #[test]

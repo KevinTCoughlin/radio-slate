@@ -12,8 +12,8 @@
 //! rest of the application continues running without MPRIS support.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::SyncSender;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use zbus::{connection, interface, zvariant};
@@ -57,7 +57,7 @@ impl MprisSharedState {
         station_url: &str,
     ) -> Self {
         let status = match state {
-            PlaybackState::Playing | PlaybackState::Buffering => "Playing",
+            PlaybackState::Playing(_) | PlaybackState::Buffering(_) => "Playing",
             PlaybackState::Stopped => "Stopped",
         };
         Self {
@@ -308,16 +308,14 @@ pub fn build_metadata(
     }
 
     if !station_name.is_empty() {
-        let val: zvariant::Value<'static> =
-            zvariant::Value::Str(station_name.to_string().into());
+        let val: zvariant::Value<'static> = zvariant::Value::Str(station_name.to_string().into());
         if let Ok(owned) = zvariant::OwnedValue::try_from(val) {
             map.insert("xesam:title".to_string(), owned);
         }
     }
 
     if !station_url.is_empty() {
-        let val: zvariant::Value<'static> =
-            zvariant::Value::Str(station_url.to_string().into());
+        let val: zvariant::Value<'static> = zvariant::Value::Str(station_url.to_string().into());
         if let Ok(owned) = zvariant::OwnedValue::try_from(val) {
             map.insert("xesam:url".to_string(), owned);
         }
@@ -338,9 +336,7 @@ pub fn build_metadata(
 ///
 /// Returns `None` when the session D-Bus is unavailable (e.g. headless
 /// environment), letting the caller continue without MPRIS support.
-pub fn spawn_mpris_service(
-    command_tx: SyncSender<MprisCommand>,
-) -> Option<MprisHandle> {
+pub fn spawn_mpris_service(command_tx: SyncSender<MprisCommand>) -> Option<MprisHandle> {
     let state = Arc::new(Mutex::new(MprisSharedState::default()));
     let notify = Arc::new(tokio::sync::Notify::new());
 
@@ -408,11 +404,8 @@ pub fn spawn_mpris_service(
                     {
                         let emitter = iface_ref.signal_emitter();
                         let guard = iface_ref.get().await;
-                        let _ =
-                            MediaPlayer2Player::playback_status_changed(&guard, emitter)
-                                .await;
-                        let _ =
-                            MediaPlayer2Player::metadata_changed(&guard, emitter).await;
+                        let _ = MediaPlayer2Player::playback_status_changed(&guard, emitter).await;
+                        let _ = MediaPlayer2Player::metadata_changed(&guard, emitter).await;
                     }
                 }
             });
@@ -471,7 +464,9 @@ mod tests {
     #[test]
     fn shared_state_maps_playing_domain_state() {
         let s = MprisSharedState::from_playback_state(
-            PlaybackState::Playing,
+            PlaybackState::Playing(crate::domain::StationSelection::new(
+                crate::domain::StationId::new("kexp"),
+            )),
             "KEXP",
             "http://kexp.test/stream",
         );
@@ -488,7 +483,9 @@ mod tests {
     #[test]
     fn shared_state_maps_buffering_to_playing() {
         let s = MprisSharedState::from_playback_state(
-            PlaybackState::Buffering,
+            PlaybackState::Buffering(crate::domain::StationSelection::new(
+                crate::domain::StationId::new("kexp"),
+            )),
             "KEXP",
             "http://kexp.test/stream",
         );
@@ -498,7 +495,10 @@ mod tests {
     #[test]
     fn metadata_always_contains_trackid() {
         let m = build_metadata("KEXP", "http://kexp.test/stream");
-        assert!(m.contains_key("mpris:trackid"), "mpris:trackid is required by spec");
+        assert!(
+            m.contains_key("mpris:trackid"),
+            "mpris:trackid is required by spec"
+        );
     }
 
     #[test]
