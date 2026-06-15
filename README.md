@@ -28,6 +28,10 @@ cargo run -- --tray
 ```
 
 The tray path uses the local AppIndicator/GTK menu for toggling playback and quitting the app.
+It also supports lightweight local desktop notifications (`notify-send` when available),
+shows station metadata with safe fallback labels, and accepts keyboard/media shortcuts:
+- play/pause: `Space`, `P`, `K`, `XF86AudioPlay`, `XF86AudioPause`
+- next station: `N`, `XF86AudioNext`
 
 ## Local install
 
@@ -36,6 +40,35 @@ cargo install --path . --locked
 ~/.cargo/bin/radio-slate --play
 ~/.cargo/bin/radio-slate --list --format json
 ```
+
+## Sponsor
+
+If you want to support ongoing Linux desktop tooling and open-source maintenance, sponsor the project via GitHub Sponsors:
+
+- https://github.com/sponsors/kevintcoughlin
+
+## Fedora install helper
+
+For a one-command install on Fedora Linux, use the helper script:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KevinTCoughlin/radio-slate/main/scripts/install-fedora.sh | bash
+```
+
+The script installs the Fedora build/runtime prerequisites (`cargo`, `mpv`, `ffmpeg`, GTK/AppIndicator development headers), then installs the binary into `~/.cargo/bin`.
+
+## GitHub Pages site
+
+The repository includes a simple marketing site in `docs/` and an automated Pages deployment workflow in `.github/workflows/pages.yml`.
+
+## Containerized build
+
+```sh
+podman build -t radio-slate .
+podman run --rm -it localhost/radio-slate --list --format json
+```
+
+The container path is intended for reproducible builds and CLI workflows. Tray/desktop integration still uses the host GTK/AppIndicator session.
 
 ## Default station
 

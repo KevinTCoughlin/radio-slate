@@ -13,6 +13,13 @@ clippy:
 test:
     cargo test
 
+package:
+    cargo package --locked
+
+verify-release:
+    cargo install --path . --locked --root /tmp/radio-slate-install
+    /tmp/radio-slate-install/bin/radio-slate --list --format json
+
 run:
     cargo run -- --play
 
@@ -21,6 +28,15 @@ list:
 
 install:
     cargo install --path . --locked
+
+install-fedora:
+    bash scripts/install-fedora.sh
+
+container-build:
+    podman build -t radio-slate .
+
+container-run:
+    podman run --rm -it localhost/radio-slate --list --format json
 
 clean:
     cargo clean

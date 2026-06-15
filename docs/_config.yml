@@ -1,0 +1,6 @@
+title: radio-slate
+description: A fresh Rust radio player for Fedora/Linux desktops.
+baseurl: ""
+url: "https://kevintcoughlin.github.io/radio-slate"
+theme: minima
+plugins: []
