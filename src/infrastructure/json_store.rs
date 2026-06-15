@@ -97,13 +97,7 @@ impl JsonStationRepository {
     ///
     /// Returns an error if a station with the same `id` already exists.
     pub fn add(&mut self, station: Station) -> anyhow::Result<()> {
-        if self.stations.iter().any(|s| s.id == station.id) {
-            anyhow::bail!(
-                "station '{}' already exists in the library",
-                station.id.as_ref()
-            );
-        }
-        self.stations.push(station);
+        self.insert(station).map_err(|e| anyhow::anyhow!(e))?;
         self.save()
     }
 
@@ -111,9 +105,7 @@ impl JsonStationRepository {
     ///
     /// Returns `true` if a station was removed, `false` if nothing matched.
     pub fn remove(&mut self, id: &StationId) -> anyhow::Result<bool> {
-        let before = self.stations.len();
-        self.stations.retain(|s| s.id != *id);
-        let removed = self.stations.len() < before;
+        let removed = self.delete(id);
         if removed {
             self.save()?;
         }
@@ -127,8 +119,7 @@ impl JsonStationRepository {
     pub fn add_many(&mut self, stations: Vec<Station>) -> anyhow::Result<usize> {
         let mut added = 0usize;
         for station in stations {
-            if !self.stations.iter().any(|s| s.id == station.id) {
-                self.stations.push(station);
+            if self.insert(station).is_ok() {
                 added += 1;
             }
         }
@@ -136,6 +127,25 @@ impl JsonStationRepository {
             self.save()?;
         }
         Ok(added)
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    fn insert(&mut self, station: Station) -> Result<(), String> {
+        if self.stations.iter().any(|s| s.id == station.id) {
+            return Err(format!(
+                "station '{}' already exists in the library",
+                station.id.as_ref()
+            ));
+        }
+        self.stations.push(station);
+        Ok(())
+    }
+
+    fn delete(&mut self, id: &StationId) -> bool {
+        let before = self.stations.len();
+        self.stations.retain(|s| s.id != *id);
+        self.stations.len() < before
     }
 }
 
@@ -146,6 +156,19 @@ impl StationRepository for JsonStationRepository {
 
     fn get(&self, id: &StationId) -> Option<Station> {
         self.stations.iter().find(|s| s.id == *id).cloned()
+    }
+
+    fn add(&mut self, station: Station) -> Result<(), String> {
+        self.insert(station)?;
+        self.save().map_err(|e| e.to_string())
+    }
+
+    fn remove(&mut self, id: &StationId) -> Result<bool, String> {
+        let removed = self.delete(id);
+        if removed {
+            self.save().map_err(|e| e.to_string())?;
+        }
+        Ok(removed)
     }
 }
 

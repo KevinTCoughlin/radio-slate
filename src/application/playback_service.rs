@@ -136,6 +136,20 @@ mod tests {
                 .find(|station| station.id == *id)
                 .cloned()
         }
+
+        fn add(&mut self, station: Station) -> Result<(), String> {
+            if self.stations.iter().any(|s| s.id == station.id) {
+                return Err(format!("station '{}' already exists", station.id));
+            }
+            self.stations.push(station);
+            Ok(())
+        }
+
+        fn remove(&mut self, id: &StationId) -> Result<bool, String> {
+            let before = self.stations.len();
+            self.stations.retain(|s| s.id != *id);
+            Ok(self.stations.len() < before)
+        }
     }
 
     #[derive(Default)]

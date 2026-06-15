@@ -91,6 +91,27 @@ impl From<std::io::Error> for PlaybackError {
 pub trait StationRepository {
     fn list(&self) -> Vec<Station>;
     fn get(&self, id: &StationId) -> Option<Station>;
+
+    /// Add a single station. Returns an error if a station with the same id
+    /// already exists.
+    fn add(&mut self, station: Station) -> Result<(), String>;
+
+    /// Remove the station with the given id. Returns `true` if a station was
+    /// removed, `false` if nothing matched.
+    fn remove(&mut self, id: &StationId) -> Result<bool, String>;
+
+    /// Add multiple stations at once, skipping duplicates. Returns the number
+    /// of stations actually inserted.
+    fn add_many(&mut self, stations: Vec<Station>) -> Result<usize, String> {
+        let mut added = 0usize;
+        for station in stations {
+            if self.get(&station.id).is_none() {
+                self.add(station)?;
+                added += 1;
+            }
+        }
+        Ok(added)
+    }
 }
 
 impl Station {

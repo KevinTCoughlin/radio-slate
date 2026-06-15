@@ -5,6 +5,7 @@ pub mod json_store;
 pub mod mpris;
 pub mod notifications;
 pub mod output;
+pub mod sqlite_store;
 
 pub use audio_player::{AudioPlayback, HttpAudioPlayer};
 pub use import_export::{export_to_m3u, export_to_path, import_from_path, parse_m3u, parse_pls};
@@ -13,3 +14,4 @@ pub use json_store::JsonStationRepository;
 pub use mpris::{MprisCommand, MprisHandle, spawn_mpris_service};
 pub use notifications::{send_now_playing, send_stopped};
 pub use output::{BufferedSink, FileSink, OutputSink, StdoutSink};
+pub use sqlite_store::SqliteStationRepository;
