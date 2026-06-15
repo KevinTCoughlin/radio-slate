@@ -82,11 +82,25 @@ The release workflow publishes two Linux artifacts on version tags:
 
 ## Default station
 
-The current default test stream is pinned to KEXP:
+By default, the app starts from:
 
 ```text
 http://live-mp3-128.kexp.org/kexp128.mp3
 ```
+
+You can customize local settings in:
+
+- `${XDG_CONFIG_HOME:-$HOME/.config}/radio-slate/config.json`
+- `${XDG_STATE_HOME:-$HOME/.local/state}/radio-slate/state.json`
+
+`config.json` supports:
+
+- `volume_percent`
+- `default_station_url`
+- `tray_autoplay`
+- `tray_icon`
+
+`state.json` stores `last_station_url` so startup can restore your previous station.
 
 ## Editor support
 

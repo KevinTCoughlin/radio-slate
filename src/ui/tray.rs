@@ -7,7 +7,28 @@ use std::{
 use gtk::prelude::*;
 use libappindicator::{AppIndicator, AppIndicatorStatus};
 
+use crate::application::PlaybackService;
+use crate::domain::{PlaybackError, PlaybackState, StationRepository};
+use crate::infrastructure::AudioPlayback;
+
 const DEFAULT_STATION_URL: &str = "http://live-mp3-128.kexp.org/kexp128.mp3";
+
+pub fn tray_toggle_label(state: &PlaybackState) -> &'static str {
+    match state {
+        PlaybackState::Stopped => "Play KEXP",
+        PlaybackState::Buffering(_) | PlaybackState::Playing(_) => "Stop KEXP",
+    }
+}
+
+pub fn toggle_tray_playback<R: StationRepository, P: AudioPlayback>(
+    service: &mut PlaybackService<R, P>,
+) -> Result<PlaybackState, PlaybackError> {
+    if service.selected_station().is_none() {
+        service.select_default_station()?;
+    }
+
+    service.toggle_selected()
+}
 
 #[derive(Debug, Clone, Copy)]
 struct PlayerLauncher {
