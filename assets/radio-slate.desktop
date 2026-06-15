@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=radio-slate
+Comment=Tray radio player with MPRIS controls
+Exec=@RADIO_SLATE_BIN@ --tray
+Icon=audio-x-generic
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=radio;audio;stream;tray;MPRIS;
+StartupNotify=false

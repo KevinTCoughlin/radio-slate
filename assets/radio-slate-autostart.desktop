@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=radio-slate Tray
+Comment=Start radio-slate tray controls on login
+Exec=@RADIO_SLATE_BIN@ --tray
+Icon=audio-x-generic
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=2
+StartupNotify=false
