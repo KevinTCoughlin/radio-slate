@@ -1,4 +1,4 @@
-use crate::domain::{Station, StationId, StationRepository};
+use crate::domain::{MutableStationRepository, Station, StationId, StationRepository};
 
 #[derive(Default, Clone)]
 pub struct InMemoryStationRepository {
@@ -21,6 +21,36 @@ impl StationRepository for InMemoryStationRepository {
             .iter()
             .find(|station| station.id == *id)
             .cloned()
+    }
+}
+
+impl MutableStationRepository for InMemoryStationRepository {
+    fn add(&mut self, station: Station) -> anyhow::Result<()> {
+        if self.stations.iter().any(|s| s.id == station.id) {
+            anyhow::bail!(
+                "station '{}' already exists in the library",
+                station.id.as_ref()
+            );
+        }
+        self.stations.push(station);
+        Ok(())
+    }
+
+    fn remove(&mut self, id: &StationId) -> anyhow::Result<bool> {
+        let before = self.stations.len();
+        self.stations.retain(|s| s.id != *id);
+        Ok(self.stations.len() < before)
+    }
+
+    fn add_many(&mut self, stations: Vec<Station>) -> anyhow::Result<usize> {
+        let mut added = 0usize;
+        for station in stations {
+            if !self.stations.iter().any(|s| s.id == station.id) {
+                self.stations.push(station);
+                added += 1;
+            }
+        }
+        Ok(added)
     }
 }
 

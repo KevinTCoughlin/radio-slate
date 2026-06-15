@@ -15,6 +15,7 @@ include = ["/Cargo.lock", "/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
 anyhow = "1.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
 clap = { version = "4.0", features = ["derive"] }
 glib = "0.18.2"
 gtk = { version = "0.18.2", features = ["v3_24"] }

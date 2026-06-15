@@ -93,6 +93,34 @@ pub trait StationRepository {
     fn get(&self, id: &StationId) -> Option<Station>;
 }
 
+/// Extension of [`StationRepository`] that supports mutating the station library.
+///
+/// Both durable backends ([`JsonStationRepository`] and [`SqliteStationRepository`])
+/// implement this trait, which makes swapping backends a matter of choosing a
+/// concrete type at startup.
+///
+/// [`JsonStationRepository`]: crate::infrastructure::JsonStationRepository
+/// [`SqliteStationRepository`]: crate::infrastructure::SqliteStationRepository
+pub trait MutableStationRepository: StationRepository {
+    /// Add a station, returning an error if a station with the same id already exists.
+    fn add(&mut self, station: Station) -> anyhow::Result<()>;
+    /// Remove the station with `id`.  Returns `true` if a station was removed.
+    fn remove(&mut self, id: &StationId) -> anyhow::Result<bool>;
+    /// Add multiple stations, silently skipping duplicates.
+    /// Returns the number actually inserted.
+    fn add_many(&mut self, stations: Vec<Station>) -> anyhow::Result<usize>;
+}
+
+impl StationRepository for Box<dyn MutableStationRepository> {
+    fn list(&self) -> Vec<Station> {
+        (**self).list()
+    }
+
+    fn get(&self, id: &StationId) -> Option<Station> {
+        (**self).get(id)
+    }
+}
+
 impl Station {
     pub fn new(name: &str, url: &str, genre: &str) -> Result<Self, String> {
         let name = name.trim().to_string();

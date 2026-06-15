@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{Station, StationId, StationRepository};
+use crate::domain::{MutableStationRepository, Station, StationId, StationRepository};
 
 const DEFAULT_STATION_NAME: &str = "KEXP";
 const DEFAULT_STATION_URL: &str = "http://live-mp3-128.kexp.org/kexp128.mp3";
@@ -146,6 +146,20 @@ impl StationRepository for JsonStationRepository {
 
     fn get(&self, id: &StationId) -> Option<Station> {
         self.stations.iter().find(|s| s.id == *id).cloned()
+    }
+}
+
+impl MutableStationRepository for JsonStationRepository {
+    fn add(&mut self, station: Station) -> anyhow::Result<()> {
+        JsonStationRepository::add(self, station)
+    }
+
+    fn remove(&mut self, id: &StationId) -> anyhow::Result<bool> {
+        JsonStationRepository::remove(self, id)
+    }
+
+    fn add_many(&mut self, stations: Vec<Station>) -> anyhow::Result<usize> {
+        JsonStationRepository::add_many(self, stations)
     }
 }
 

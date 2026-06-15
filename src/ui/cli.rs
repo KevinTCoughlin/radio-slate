@@ -4,9 +4,10 @@ use clap::{Parser, ValueEnum};
 use serde_json::json;
 
 use crate::application::PlaybackService;
-use crate::domain::{PlaybackState, Station, StationRepository};
+use crate::domain::{MutableStationRepository, PlaybackState, Station, StationRepository};
 use crate::infrastructure::{
-    FileSink, HttpAudioPlayer, JsonStationRepository, StdoutSink, export_to_path, import_from_path,
+    FileSink, HttpAudioPlayer, JsonStationRepository, SqliteStationRepository, StdoutSink,
+    export_to_path, import_from_path,
 };
 use crate::ui::run_tray;
 
@@ -14,6 +15,12 @@ use crate::ui::run_tray;
 enum OutputFormat {
     Text,
     Json,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
+enum StoreBackend {
+    Json,
+    Sqlite,
 }
 
 #[derive(Debug, Parser)]
@@ -59,6 +66,47 @@ struct CliArgs {
     /// Export all stations to a file (.json, .m3u, or .m3u8).
     #[arg(long, value_name = "FILE")]
     export: Option<std::path::PathBuf>,
+
+    /// Station library backend to use.
+    #[arg(long, value_enum, default_value_t = StoreBackend::Json)]
+    store: StoreBackend,
+}
+
+fn open_repository(store: StoreBackend) -> Box<dyn MutableStationRepository> {
+    match store {
+        StoreBackend::Json => {
+            let path = match JsonStationRepository::default_path() {
+                Ok(p) => p,
+                Err(error) => {
+                    eprintln!("could not determine station library path: {error}");
+                    std::process::exit(1);
+                }
+            };
+            match JsonStationRepository::open(&path) {
+                Ok(r) => Box::new(r),
+                Err(error) => {
+                    eprintln!("failed to open station library: {error}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        StoreBackend::Sqlite => {
+            let path = match SqliteStationRepository::default_path() {
+                Ok(p) => p,
+                Err(error) => {
+                    eprintln!("could not determine SQLite database path: {error}");
+                    std::process::exit(1);
+                }
+            };
+            match SqliteStationRepository::open(&path) {
+                Ok(r) => Box::new(r),
+                Err(error) => {
+                    eprintln!("failed to open SQLite station database: {error}");
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
 }
 
 pub fn run() {
@@ -72,22 +120,7 @@ pub fn run() {
         return;
     }
 
-    // Resolve the persistent station store path.
-    let store_path = match JsonStationRepository::default_path() {
-        Ok(p) => p,
-        Err(error) => {
-            eprintln!("could not determine station library path: {error}");
-            std::process::exit(1);
-        }
-    };
-
-    let mut repository = match JsonStationRepository::open(&store_path) {
-        Ok(r) => r,
-        Err(error) => {
-            eprintln!("failed to open station library: {error}");
-            std::process::exit(1);
-        }
-    };
+    let mut repository = open_repository(args.store);
 
     // --add-station
     if let Some(url) = &args.add_station {
