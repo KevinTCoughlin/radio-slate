@@ -23,6 +23,12 @@ impl AsRef<str> for StationId {
     }
 }
 
+impl std::fmt::Display for StationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StationSelection {
     station_id: StationId,
@@ -115,7 +121,7 @@ impl Station {
 
 #[cfg(test)]
 mod tests {
-    use super::{PlaybackState, Station, StationSelection};
+    use super::{PlaybackState, Station, StationId, StationSelection};
 
     #[test]
     fn station_rejects_invalid_input() {
@@ -130,8 +136,25 @@ mod tests {
     }
 
     #[test]
+    fn station_id_display_matches_inner_value() {
+        let id = StationId::new("station-echo");
+        assert_eq!(id.to_string(), "station-echo");
+    }
+
+    #[test]
+    fn station_id_derived_from_name() {
+        let station = Station::new("My Jazz", "https://example.test/stream", "jazz").unwrap();
+        assert_eq!(station.id.to_string(), "station-my-jazz");
+    }
+
+    #[test]
+    fn station_rejects_non_http_url() {
+        assert!(Station::new("Bad", "ftp://example.test/stream", "rock").is_err());
+    }
+
+    #[test]
     fn playback_state_label_matches_variant() {
-        let selection = StationSelection::new(super::StationId::new("station-echo"));
+        let selection = StationSelection::new(StationId::new("station-echo"));
         assert_eq!(PlaybackState::Stopped.status_label(), "stopped");
         assert_eq!(
             PlaybackState::Buffering(selection.clone()).status_label(),
