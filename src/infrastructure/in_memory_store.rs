@@ -56,7 +56,8 @@ mod tests {
 
     #[test]
     fn repository_get_returns_none_for_unknown_id() {
-        let repo = InMemoryStationRepository::with_seed_stations(vec![make_station("Echo", "news")]);
+        let repo =
+            InMemoryStationRepository::with_seed_stations(vec![make_station("Echo", "news")]);
         assert!(repo.get(&StationId::new("station-unknown")).is_none());
     }
 }
