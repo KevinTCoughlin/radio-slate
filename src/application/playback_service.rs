@@ -1,15 +1,24 @@
 use crate::application::PlaybackSnapshot;
-use crate::domain::{PlaybackState, Station, StationId, StationRepository};
+use crate::domain::{
+    PlaybackError, PlaybackState, Station, StationId, StationRepository, StationSelection,
+};
 use crate::infrastructure::{AudioPlayback, OutputSink};
 
 pub struct PlaybackService<R: StationRepository, P: AudioPlayback> {
     repository: R,
     player: P,
+    selected_station: Option<StationSelection>,
+    playback_state: PlaybackState,
 }
 
 impl<R: StationRepository, P: AudioPlayback> PlaybackService<R, P> {
     pub fn new(repository: R, player: P) -> Self {
-        Self { repository, player }
+        Self {
+            repository,
+            player,
+            selected_station: None,
+            playback_state: PlaybackState::Stopped,
+        }
     }
 
     pub fn list_stations(&self) -> Vec<Station> {
@@ -20,12 +29,64 @@ impl<R: StationRepository, P: AudioPlayback> PlaybackService<R, P> {
         self.repository.get(id)
     }
 
-    pub fn status_label(&self, state: PlaybackState) -> &'static str {
-        self.player.status_label(state)
+    pub fn select_station(&mut self, id: &StationId) -> Result<StationSelection, PlaybackError> {
+        if self.repository.get(id).is_none() {
+            return Err(PlaybackError::StationNotFound(id.clone()));
+        }
+
+        let selection = StationSelection::new(id.clone());
+        self.selected_station = Some(selection.clone());
+        Ok(selection)
     }
 
-    pub fn play_station(&self, station: &Station) -> anyhow::Result<()> {
-        self.player.play_station(station)
+    pub fn select_default_station(&mut self) -> Result<StationSelection, PlaybackError> {
+        let station = self
+            .list_stations()
+            .into_iter()
+            .next()
+            .ok_or(PlaybackError::NoStationsConfigured)?;
+        self.select_station(&station.id)
+    }
+
+    pub fn selected_station(&self) -> Option<StationSelection> {
+        self.selected_station.clone()
+    }
+
+    pub fn playback_state(&self) -> PlaybackState {
+        self.playback_state.clone()
+    }
+
+    pub fn status_label(&self) -> &'static str {
+        self.playback_state.status_label()
+    }
+
+    pub fn play_selected(&mut self) -> Result<PlaybackState, PlaybackError> {
+        let selection = self
+            .selected_station
+            .clone()
+            .ok_or(PlaybackError::NoStationsConfigured)?;
+        let station = self
+            .repository
+            .get(selection.station_id())
+            .ok_or_else(|| PlaybackError::StationNotFound(selection.station_id().clone()))?;
+
+        self.playback_state = PlaybackState::Buffering(selection.clone());
+        self.player.play_station(&station)?;
+        self.playback_state = PlaybackState::Playing(selection.clone());
+        Ok(self.playback_state.clone())
+    }
+
+    pub fn stop(&mut self) -> Result<PlaybackState, PlaybackError> {
+        self.player.stop_playback()?;
+        self.playback_state = PlaybackState::Stopped;
+        Ok(self.playback_state.clone())
+    }
+
+    pub fn toggle_selected(&mut self) -> Result<PlaybackState, PlaybackError> {
+        match self.playback_state {
+            PlaybackState::Stopped => self.play_selected(),
+            PlaybackState::Buffering(_) | PlaybackState::Playing(_) => self.stop(),
+        }
     }
 
     /// Emit a [`PlaybackSnapshot`] for the given `state` to `sink`.
@@ -40,7 +101,7 @@ impl<R: StationRepository, P: AudioPlayback> PlaybackService<R, P> {
         sink: &mut dyn OutputSink,
     ) -> anyhow::Result<()> {
         let snapshot = PlaybackSnapshot {
-            state: self.status_label(state).to_string(),
+            state: state.status_label().to_string(),
             station,
             stations_available: self.list_stations().len(),
         };
@@ -53,8 +114,11 @@ impl<R: StationRepository, P: AudioPlayback> PlaybackService<R, P> {
 #[cfg(test)]
 mod tests {
     use super::PlaybackService;
-    use crate::domain::{PlaybackState, Station, StationId, StationRepository};
+    use crate::domain::{
+        PlaybackError, PlaybackState, Station, StationId, StationRepository, StationSelection,
+    };
     use crate::infrastructure::{AudioPlayback, BufferedSink};
+    use std::sync::Mutex;
 
     #[derive(Default)]
     struct StubRepo {
@@ -75,19 +139,20 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct StubPlayer;
+    struct StubPlayer {
+        plays: Mutex<usize>,
+        stops: Mutex<usize>,
+    }
 
     impl AudioPlayback for StubPlayer {
-        fn play_station(&self, _station: &Station) -> anyhow::Result<()> {
+        fn play_station(&self, _station: &Station) -> Result<(), PlaybackError> {
+            *self.plays.lock().unwrap() += 1;
             Ok(())
         }
 
-        fn status_label(&self, state: PlaybackState) -> &'static str {
-            match state {
-                PlaybackState::Stopped => "stopped",
-                PlaybackState::Playing => "playing",
-                PlaybackState::Buffering => "buffering",
-            }
+        fn stop_playback(&self) -> Result<(), PlaybackError> {
+            *self.stops.lock().unwrap() += 1;
+            Ok(())
         }
     }
 
@@ -97,17 +162,49 @@ mod tests {
         let repo = StubRepo {
             stations: vec![station.clone()],
         };
-        let service = PlaybackService::new(repo, StubPlayer);
+        let service = PlaybackService::new(repo, StubPlayer::default());
 
         assert_eq!(service.list_stations().len(), 1);
         assert_eq!(service.preview_station(&station.id), Some(station));
     }
 
     #[test]
-    fn playback_service_describes_state() {
-        let service = PlaybackService::new(StubRepo::default(), StubPlayer);
+    fn playback_service_tracks_selection_and_state() {
+        let station = Station::new("Echo", "https://example.test/stream", "news").unwrap();
+        let repo = StubRepo {
+            stations: vec![station.clone()],
+        };
+        let mut service = PlaybackService::new(repo, StubPlayer::default());
 
-        assert_eq!(service.status_label(PlaybackState::Playing), "playing");
+        let selection = service.select_station(&station.id).unwrap();
+        let state = service.play_selected().unwrap();
+
+        assert_eq!(selection.station_id(), &station.id);
+        assert_eq!(state, PlaybackState::Playing(selection));
+        assert_eq!(service.status_label(), "playing");
+    }
+
+    #[test]
+    fn playback_service_toggle_stops_playback() {
+        let station = Station::new("Echo", "https://example.test/stream", "news").unwrap();
+        let repo = StubRepo {
+            stations: vec![station.clone()],
+        };
+        let mut service = PlaybackService::new(repo, StubPlayer::default());
+
+        service.select_station(&station.id).unwrap();
+        service.play_selected().unwrap();
+        let state = service.toggle_selected().unwrap();
+
+        assert_eq!(state, PlaybackState::Stopped);
+    }
+
+    #[test]
+    fn playback_service_reports_missing_station_errors() {
+        let mut service = PlaybackService::new(StubRepo::default(), StubPlayer::default());
+        let err = service.select_default_station().unwrap_err();
+
+        assert_eq!(err, PlaybackError::NoStationsConfigured);
     }
 
     #[test]
@@ -116,7 +213,7 @@ mod tests {
         let repo = StubRepo {
             stations: vec![station.clone()],
         };
-        let service = PlaybackService::new(repo, StubPlayer);
+        let service = PlaybackService::new(repo, StubPlayer::default());
         let mut sink = BufferedSink::new();
 
         service
@@ -136,12 +233,18 @@ mod tests {
             Station::new("A", "https://a.test/stream", "rock").unwrap(),
             Station::new("B", "https://b.test/stream", "jazz").unwrap(),
         ];
-        let repo = StubRepo { stations };
-        let service = PlaybackService::new(repo, StubPlayer);
+        let repo = StubRepo {
+            stations: stations.clone(),
+        };
+        let service = PlaybackService::new(repo, StubPlayer::default());
         let mut sink = BufferedSink::new();
 
         service
-            .emit_snapshot(PlaybackState::Playing, None, &mut sink)
+            .emit_snapshot(
+                PlaybackState::Playing(StationSelection::new(stations[0].id.clone())),
+                None,
+                &mut sink,
+            )
             .unwrap();
 
         let parsed: serde_json::Value = serde_json::from_str(&sink.lines[0]).unwrap();

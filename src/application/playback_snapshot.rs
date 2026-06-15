@@ -60,7 +60,12 @@ mod tests {
     #[test]
     fn snapshot_with_station_roundtrips() {
         use crate::domain::Station;
-        let station = Station::new("KEXP", "http://live-mp3-128.kexp.org/kexp128.mp3", "eclectic").unwrap();
+        let station = Station::new(
+            "KEXP",
+            "http://live-mp3-128.kexp.org/kexp128.mp3",
+            "eclectic",
+        )
+        .unwrap();
         let original = PlaybackSnapshot {
             state: "playing".to_string(),
             station: Some(station),

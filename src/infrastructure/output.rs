@@ -51,8 +51,9 @@ pub struct FileSink {
 impl FileSink {
     /// Create (or truncate) the file at `path` and wrap it in a buffered sink.
     pub fn create(path: &Path) -> anyhow::Result<Self> {
-        let file = std::fs::File::create(path)
-            .map_err(|e| anyhow::anyhow!("failed to create output file '{}': {e}", path.display()))?;
+        let file = std::fs::File::create(path).map_err(|e| {
+            anyhow::anyhow!("failed to create output file '{}': {e}", path.display())
+        })?;
         Ok(Self {
             inner: BufWriter::new(file),
         })

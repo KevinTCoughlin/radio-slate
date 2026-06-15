@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.96 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.96
+
+      - name: Select Rust 1.96
+        run: rustup default 1.96
+
+      - name: Install Linux system packages
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libappindicator3-dev pkg-config
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Package crate source
+        run: cargo package --locked
+
+      - name: Assemble release artifacts
+        run: |
+          mkdir -p dist
+          tar -C target/release -czf dist/radio-slate-linux-x86_64.tar.gz radio-slate
+          cp target/package/*.crate dist/
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: radio-slate-release-artifacts
+          path: dist/*
+
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes "Automated release for $GITHUB_REF_NAME."
+          fi

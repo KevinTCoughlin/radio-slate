@@ -1,3 +1,5 @@
 pub mod station;
 
-pub use station::{PlaybackState, Station, StationId, StationRepository};
+pub use station::{
+    PlaybackError, PlaybackState, Station, StationId, StationRepository, StationSelection,
+};

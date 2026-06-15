@@ -23,11 +23,63 @@ impl AsRef<str> for StationId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StationSelection {
+    station_id: StationId,
+}
+
+impl StationSelection {
+    pub fn new(station_id: StationId) -> Self {
+        Self { station_id }
+    }
+
+    pub fn station_id(&self) -> &StationId {
+        &self.station_id
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaybackState {
     Stopped,
-    Playing,
-    Buffering,
+    Buffering(StationSelection),
+    Playing(StationSelection),
+}
+
+impl PlaybackState {
+    pub fn status_label(&self) -> &'static str {
+        match self {
+            PlaybackState::Stopped => "stopped",
+            PlaybackState::Playing(_) => "playing",
+            PlaybackState::Buffering(_) => "buffering",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlaybackError {
+    NoStationsConfigured,
+    StationNotFound(StationId),
+    PlayerUnavailable(String),
+}
+
+impl std::fmt::Display for PlaybackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlaybackError::NoStationsConfigured => write!(f, "no stations configured"),
+            PlaybackError::StationNotFound(id) => {
+                write!(f, "station not found: {}", id.as_ref())
+            }
+            PlaybackError::PlayerUnavailable(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for PlaybackError {}
+
+impl From<std::io::Error> for PlaybackError {
+    fn from(value: std::io::Error) -> Self {
+        Self::PlayerUnavailable(format!("{value}"))
+    }
 }
 
 pub trait StationRepository {
@@ -63,7 +115,7 @@ impl Station {
 
 #[cfg(test)]
 mod tests {
-    use super::Station;
+    use super::{PlaybackState, Station, StationSelection};
 
     #[test]
     fn station_rejects_invalid_input() {
@@ -75,5 +127,16 @@ mod tests {
         let station = Station::new("Echo", "https://example.test/stream", "news").unwrap();
         assert_eq!(station.genre, "news");
         assert_eq!(station.url, "https://example.test/stream");
+    }
+
+    #[test]
+    fn playback_state_label_matches_variant() {
+        let selection = StationSelection::new(super::StationId::new("station-echo"));
+        assert_eq!(PlaybackState::Stopped.status_label(), "stopped");
+        assert_eq!(
+            PlaybackState::Buffering(selection.clone()).status_label(),
+            "buffering"
+        );
+        assert_eq!(PlaybackState::Playing(selection).status_label(), "playing");
     }
 }

@@ -1,0 +1,15 @@
+{
+  "name": "radio-slate",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  },
+  "remoteUser": "root"
+}
