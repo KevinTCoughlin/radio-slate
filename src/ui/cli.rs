@@ -3,7 +3,9 @@ use serde_json::json;
 
 use crate::application::PlaybackService;
 use crate::domain::{Station, StationRepository};
-use crate::infrastructure::{export_to_path, import_from_path, HttpAudioPlayer, JsonStationRepository};
+use crate::infrastructure::{
+    HttpAudioPlayer, JsonStationRepository, export_to_path, import_from_path,
+};
 use crate::ui::run_tray;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -84,7 +86,10 @@ pub fn run() {
     // --add-station
     if let Some(url) = &args.add_station {
         let name = args.name.clone().unwrap_or_else(|| {
-            url.split('/').next_back().unwrap_or(url.as_str()).to_string()
+            url.split('/')
+                .next_back()
+                .unwrap_or(url.as_str())
+                .to_string()
         });
         let genre = args.genre.clone().unwrap_or_else(|| "imported".to_string());
         match Station::new(&name, url, &genre) {
@@ -126,7 +131,11 @@ pub fn run() {
     if let Some(export_path) = &args.export {
         let stations = repository.list();
         match export_to_path(&stations, export_path) {
-            Ok(()) => println!("exported {} stations to '{}'", stations.len(), export_path.display()),
+            Ok(()) => println!(
+                "exported {} stations to '{}'",
+                stations.len(),
+                export_path.display()
+            ),
             Err(error) => {
                 eprintln!("export failed: {error}");
                 std::process::exit(1);

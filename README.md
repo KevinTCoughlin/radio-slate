@@ -14,26 +14,9 @@ This project uses a small clean-architecture Rust layout with a CLI-first workfl
 ```sh
 just fmt
 just check
-just clippy
 just test
-just package
-just verify-release
 just run
 just list
-```
-
-## Linux build dependencies
-
-Fedora development packages:
-
-```sh
-sudo dnf install gtk3-devel libappindicator-gtk3-devel pkgconf-pkg-config
-```
-
-Ubuntu/GitHub Actions development packages:
-
-```sh
-sudo apt-get install libgtk-3-dev libappindicator3-dev pkg-config
 ```
 
 ## Tray mode
@@ -45,14 +28,10 @@ cargo run -- --tray
 ```
 
 The tray path uses the local AppIndicator/GTK menu for toggling playback and quitting the app.
-It attempts playback with `mpv` first and falls back to `ffplay` if `mpv` is unavailable.
-
-### Runtime dependencies (Linux)
-
-- GTK 3 and AppIndicator development/runtime libraries (`gtk+-3.0`, `libappindicator3`)
-- At least one supported player on your `PATH`:
-  - `mpv` (preferred)
-  - `ffplay` (fallback)
+It also supports lightweight local desktop notifications (`notify-send` when available),
+shows station metadata with safe fallback labels, and accepts keyboard/media shortcuts:
+- play/pause: `Space`, `P`, `K`, `XF86AudioPlay`, `XF86AudioPause`
+- next station: `N`, `XF86AudioNext`
 
 ## Local install
 
@@ -62,45 +41,42 @@ cargo install --path . --locked
 ~/.cargo/bin/radio-slate --list --format json
 ```
 
-## Release verification
+## Sponsor
 
-Validate the same path used by CI and the release workflow:
+If you want to support ongoing Linux desktop tooling and open-source maintenance, sponsor the project via GitHub Sponsors:
+
+- https://github.com/sponsors/kevintcoughlin
+
+## Fedora install helper
+
+For a one-command install on Fedora Linux, use the helper script:
 
 ```sh
-cargo fmt --all --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-cargo package --locked
-cargo install --path . --locked --root /tmp/radio-slate-install
-/tmp/radio-slate-install/bin/radio-slate --list --format json
+curl -fsSL https://raw.githubusercontent.com/KevinTCoughlin/radio-slate/main/scripts/install-fedora.sh | bash
 ```
 
-The release workflow publishes two Linux artifacts on version tags:
+The script installs the Fedora build/runtime prerequisites (`cargo`, `mpv`, `ffmpeg`, GTK/AppIndicator development headers), then installs the binary into `~/.cargo/bin`.
 
-- `radio-slate-linux-x86_64.tar.gz` containing the release binary
-- `radio-slate-<version>.crate` containing the packaged crate source
+## GitHub Pages site
+
+The repository includes a simple marketing site in `docs/` and an automated Pages deployment workflow in `.github/workflows/pages.yml`.
+
+## Containerized build
+
+```sh
+podman build -t radio-slate .
+podman run --rm -it localhost/radio-slate --list --format json
+```
+
+The container path is intended for reproducible builds and CLI workflows. Tray/desktop integration still uses the host GTK/AppIndicator session.
 
 ## Default station
 
-By default, the app starts from:
+The current default test stream is pinned to KEXP:
 
 ```text
 http://live-mp3-128.kexp.org/kexp128.mp3
 ```
-
-You can customize local settings in:
-
-- `${XDG_CONFIG_HOME:-$HOME/.config}/radio-slate/config.json`
-- `${XDG_STATE_HOME:-$HOME/.local/state}/radio-slate/state.json`
-
-`config.json` supports:
-
-- `volume_percent`
-- `default_station_url`
-- `tray_autoplay`
-- `tray_icon`
-
-`state.json` stores `last_station_url` so startup can restore your previous station.
 
 ## Editor support
 

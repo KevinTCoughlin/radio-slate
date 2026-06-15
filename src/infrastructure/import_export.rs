@@ -241,8 +241,7 @@ https://world.example.test/live
 
     #[test]
     fn parse_json_round_trips_stations() {
-        let station =
-            Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
+        let station = Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
         let json = serde_json::to_string(&vec![station.clone()]).unwrap();
         let stations = parse_json(&json).unwrap();
         assert_eq!(stations.len(), 1);
@@ -253,8 +252,7 @@ https://world.example.test/live
 
     #[test]
     fn export_to_json_produces_valid_json() {
-        let station =
-            Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
+        let station = Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
         let json = export_to_json(&[station]).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed.is_array());
@@ -262,8 +260,7 @@ https://world.example.test/live
 
     #[test]
     fn export_to_m3u_includes_extinf_and_url() {
-        let station =
-            Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
+        let station = Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
         let m3u = export_to_m3u(&[station]);
         assert!(m3u.contains("#EXTM3U"));
         assert!(m3u.contains("#EXTINF:-1,Echo"));
@@ -274,8 +271,7 @@ https://world.example.test/live
     fn export_to_path_writes_json_file() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("export.json");
-        let station =
-            Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
+        let station = Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
         export_to_path(&[station], &path).unwrap();
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("Echo"));
@@ -285,8 +281,7 @@ https://world.example.test/live
     fn export_to_path_writes_m3u_file() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("export.m3u");
-        let station =
-            Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
+        let station = Station::new("Echo", "https://example.test/stream", "jazz").unwrap();
         export_to_path(&[station], &path).unwrap();
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("#EXTM3U"));

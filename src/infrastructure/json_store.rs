@@ -98,7 +98,10 @@ impl JsonStationRepository {
     /// Returns an error if a station with the same `id` already exists.
     pub fn add(&mut self, station: Station) -> anyhow::Result<()> {
         if self.stations.iter().any(|s| s.id == station.id) {
-            anyhow::bail!("station '{}' already exists in the library", station.id.as_ref());
+            anyhow::bail!(
+                "station '{}' already exists in the library",
+                station.id.as_ref()
+            );
         }
         self.stations.push(station);
         self.save()

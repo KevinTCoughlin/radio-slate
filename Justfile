@@ -29,5 +29,14 @@ list:
 install:
     cargo install --path . --locked
 
+install-fedora:
+    bash scripts/install-fedora.sh
+
+container-build:
+    podman build -t radio-slate .
+
+container-run:
+    podman run --rm -it localhost/radio-slate --list --format json
+
 clean:
     cargo clean

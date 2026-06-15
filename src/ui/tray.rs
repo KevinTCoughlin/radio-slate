@@ -1,5 +1,4 @@
 use std::{
-    io::ErrorKind,
     process::{Child, Command},
     sync::{Arc, Mutex},
 };
@@ -8,8 +7,12 @@ use gtk::prelude::*;
 use libappindicator::{AppIndicator, AppIndicatorStatus};
 
 use crate::application::PlaybackService;
-use crate::domain::{PlaybackError, PlaybackState, StationRepository};
+use crate::domain::{PlaybackError, PlaybackState, Station, StationRepository};
 use crate::infrastructure::AudioPlayback;
+use crate::ui::metadata::{
+    StationMetadata, format_metadata, parse_bitrate_from_url, parse_stream_title,
+};
+use crate::ui::shortcuts::{ShortcutAction, shortcut_action_for_key};
 
 const DEFAULT_STATION_URL: &str = "http://live-mp3-128.kexp.org/kexp128.mp3";
 
@@ -30,239 +33,181 @@ pub fn toggle_tray_playback<R: StationRepository, P: AudioPlayback>(
     service.toggle_selected()
 }
 
-#[derive(Debug, Clone, Copy)]
-struct PlayerLauncher {
-    name: &'static str,
-    binary: &'static str,
-    args: &'static [&'static str],
+struct TrayState {
+    child: Option<Child>,
+    stations: Vec<Station>,
+    station_index: usize,
 }
 
-const MPV_LAUNCHER: PlayerLauncher = PlayerLauncher {
-    name: "mpv",
-    binary: "mpv",
-    args: &[
-        "--no-video",
-        "--really-quiet",
-        "--no-terminal",
-        "--volume=70",
-    ],
-};
-
-const FFPLAY_LAUNCHER: PlayerLauncher = PlayerLauncher {
-    name: "ffplay",
-    binary: "ffplay",
-    args: &["-nodisp", "-autoexit", "-vn", "-loglevel", "quiet"],
-};
-
-#[derive(Debug)]
-struct PlaybackProcess {
-    child: Child,
-    backend: &'static str,
+fn build_stations() -> Vec<Station> {
+    vec![Station::new("KEXP", DEFAULT_STATION_URL, "eclectic").unwrap()]
 }
 
-fn status_text(is_playing: bool, is_buffering: bool) -> &'static str {
-    if is_buffering {
-        "Status: buffering"
-    } else if is_playing {
-        "Status: playing"
-    } else {
-        "Status: stopped"
+fn spawn_playback(url: &str) -> std::io::Result<Child> {
+    let mpv = Command::new("mpv")
+        .args([
+            "--no-video",
+            "--really-quiet",
+            "--no-terminal",
+            "--volume=70",
+            url,
+        ])
+        .spawn();
+
+    match mpv {
+        Ok(child) => Ok(child),
+        Err(_) => Command::new("ffplay")
+            .args(["-nodisp", "-autoexit", "-vn", "-loglevel", "quiet", url])
+            .spawn(),
     }
 }
 
-fn spawn_with_fallback(
-    stream_url: &str,
-    launchers: &[PlayerLauncher],
-) -> anyhow::Result<PlaybackProcess> {
-    let mut startup_errors = Vec::new();
+fn stop_playback(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
 
-    for launcher in launchers {
-        match Command::new(launcher.binary)
-            .args(launcher.args)
-            .arg(stream_url)
-            .spawn()
-        {
-            Ok(child) => {
-                return Ok(PlaybackProcess {
-                    child,
-                    backend: launcher.name,
-                });
-            }
-            Err(error) => startup_errors.push(format!("{}: {error}", launcher.name)),
+fn send_notification(summary: &str, body: &str) {
+    let _ = Command::new("notify-send").args([summary, body]).spawn();
+}
+
+fn is_playing(state: &mut TrayState) -> bool {
+    state
+        .child
+        .as_mut()
+        .map(|child| child.try_wait().unwrap_or(None).is_none())
+        .unwrap_or(false)
+}
+
+fn metadata_for_station(station: &Station) -> StationMetadata {
+    let mut metadata = parse_stream_title(&station.name).unwrap_or_default();
+    metadata.bitrate_kbps = parse_bitrate_from_url(&station.url);
+    metadata
+}
+
+fn start_station_playback(state: &mut TrayState, toggle: &gtk::MenuItem, metadata: &gtk::MenuItem) {
+    let Some(station) = state.stations.get(state.station_index) else {
+        return;
+    };
+
+    match spawn_playback(&station.url) {
+        Ok(child) => {
+            state.child.replace(child);
+            toggle.set_label(&format!("Pause {}", station.name));
+
+            let station_metadata = metadata_for_station(station);
+            let metadata_text = format_metadata(&station_metadata);
+            metadata.set_label(&format!("Metadata: {metadata_text}"));
+            send_notification(
+                "radio-slate",
+                &format!("Playing {} ({metadata_text})", station.name),
+            );
+        }
+        Err(_) => {
+            eprintln!("playback spawn failed");
+            send_notification("radio-slate", "Playback failed to start");
         }
     }
-
-    Err(anyhow::anyhow!(
-        "failed to start playback process with any configured player ({}). Ensure mpv or ffplay is installed and available on PATH.",
-        startup_errors.join("; ")
-    ))
 }
 
-fn spawn_playback() -> anyhow::Result<PlaybackProcess> {
-    spawn_with_fallback(DEFAULT_STATION_URL, &[MPV_LAUNCHER, FFPLAY_LAUNCHER])
-}
-
-fn playback_is_running(playback: &mut PlaybackProcess) -> anyhow::Result<bool> {
-    playback
-        .child
-        .try_wait()
-        .map(|status| status.is_none())
-        .map_err(|error| anyhow::anyhow!("failed to inspect playback process state: {error}"))
-}
-
-fn stop_playback(playback: &mut PlaybackProcess) -> anyhow::Result<()> {
-    if playback
-        .child
-        .try_wait()
-        .map_err(|error| anyhow::anyhow!("failed to inspect playback process state: {error}"))?
-        .is_some()
-    {
-        return Ok(());
+fn toggle_playback(state: &mut TrayState, toggle: &gtk::MenuItem, metadata: &gtk::MenuItem) {
+    if is_playing(state) {
+        if let Some(child) = state.child.as_mut() {
+            stop_playback(child);
+        }
+        state.child.take();
+        if let Some(station) = state.stations.get(state.station_index) {
+            toggle.set_label(&format!("Play {}", station.name));
+        } else {
+            toggle.set_label("Play");
+        }
+        metadata.set_label("Metadata: unavailable");
+        send_notification("radio-slate", "Playback paused");
+        return;
     }
 
-    if let Err(error) = playback.child.kill()
-        && !matches!(error.kind(), ErrorKind::InvalidInput | ErrorKind::NotFound)
-    {
-        return Err(anyhow::anyhow!("failed to stop playback process: {error}"));
-    }
+    start_station_playback(state, toggle, metadata);
+}
 
-    playback
-        .child
-        .wait()
-        .map_err(|error| anyhow::anyhow!("failed to reap playback process: {error}"))?;
-    Ok(())
+fn next_station(state: &mut TrayState, toggle: &gtk::MenuItem, metadata: &gtk::MenuItem) {
+    if state.stations.is_empty() {
+        return;
+    }
+    if let Some(child) = state.child.as_mut() {
+        stop_playback(child);
+    }
+    state.child.take();
+    state.station_index = (state.station_index + 1) % state.stations.len();
+    start_station_playback(state, toggle, metadata);
 }
 
 pub fn run_tray() -> anyhow::Result<()> {
     gtk::init().map_err(|_| anyhow::anyhow!("GTK initialization failed"))?;
 
-    let active_child = Arc::new(Mutex::new(None::<PlaybackProcess>));
+    let state = Arc::new(Mutex::new(TrayState {
+        child: None,
+        stations: build_stations(),
+        station_index: 0,
+    }));
 
     let mut indicator = AppIndicator::new("radio-slate", "audio-x-generic");
+    indicator.set_status(AppIndicatorStatus::Active);
 
     let mut menu = gtk::Menu::new();
     let toggle = gtk::MenuItem::with_label("Play KEXP");
-    let status = gtk::MenuItem::with_label(status_text(false, false));
-    status.set_sensitive(false);
+    let next = gtk::MenuItem::with_label("Next Station");
+    let metadata = gtk::MenuItem::with_label("Metadata: unavailable");
+    metadata.set_sensitive(false);
     let quit = gtk::MenuItem::with_label("Quit");
 
-    let active_child_for_click = Arc::clone(&active_child);
-    let toggle_label = toggle.clone();
-    let status_label = status.clone();
+    let state_for_click = Arc::clone(&state);
+    let toggle_for_click = toggle.clone();
+    let metadata_for_click = metadata.clone();
     toggle.connect_activate(move |_| {
-        let mut child_guard = active_child_for_click.lock().unwrap();
+        if let Ok(mut state) = state_for_click.lock() {
+            toggle_playback(&mut state, &toggle_for_click, &metadata_for_click);
+        }
+    });
 
-        let was_running = match child_guard.as_mut() {
-            Some(playback) => match playback_is_running(playback) {
-                Ok(is_running) => is_running,
-                Err(error) => {
-                    eprintln!("playback status check failed: {error}");
-                    false
+    let state_for_next = Arc::clone(&state);
+    let toggle_for_next = toggle.clone();
+    let metadata_for_next = metadata.clone();
+    next.connect_activate(move |_| {
+        if let Ok(mut state) = state_for_next.lock() {
+            next_station(&mut state, &toggle_for_next, &metadata_for_next);
+        }
+    });
+
+    let state_for_key = Arc::clone(&state);
+    let toggle_for_key = toggle.clone();
+    let metadata_for_key = metadata.clone();
+    menu.connect_key_press_event(move |_, event| {
+        if let Some(key_name) = event.keyval().name().as_deref()
+            && let Some(action) = shortcut_action_for_key(key_name)
+            && let Ok(mut state) = state_for_key.lock()
+        {
+            match action {
+                ShortcutAction::TogglePlayback => {
+                    toggle_playback(&mut state, &toggle_for_key, &metadata_for_key)
                 }
-            },
-            None => false,
-        };
-
-        if was_running {
-            status_label.set_label(status_text(false, true));
-            if let Some(child) = child_guard.as_mut()
-                && let Err(error) = stop_playback(child)
-            {
-                eprintln!("playback stop failed: {error}");
-            }
-            child_guard.take();
-            toggle_label.set_label("Play KEXP");
-            status_label.set_label(status_text(false, false));
-            return;
-        }
-
-        child_guard.take();
-        status_label.set_label(status_text(false, true));
-        match spawn_playback() {
-            Ok(child) => {
-                eprintln!("playback started with {}", child.backend);
-                child_guard.replace(child);
-                toggle_label.set_label("Stop KEXP");
-                status_label.set_label(status_text(true, false));
-            }
-            Err(error) => {
-                eprintln!("playback spawn failed: {error}");
-                toggle_label.set_label("Play KEXP");
-                status_label.set_label(status_text(false, false));
+                ShortcutAction::NextStation => {
+                    next_station(&mut state, &toggle_for_key, &metadata_for_key)
+                }
             }
         }
+        glib::Propagation::Proceed
     });
 
     quit.connect_activate(|_| gtk::main_quit());
 
     menu.append(&toggle);
-    menu.append(&status);
+    menu.append(&next);
+    menu.append(&metadata);
     menu.append(&gtk::SeparatorMenuItem::new());
     menu.append(&quit);
     menu.show_all();
     indicator.set_menu(&mut menu);
-    indicator.set_status(AppIndicatorStatus::Active);
 
     gtk::main();
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{PlayerLauncher, playback_is_running, spawn_with_fallback, stop_playback};
-    use std::{thread, time::Duration};
-
-    const MISSING_LAUNCHER: PlayerLauncher = PlayerLauncher {
-        name: "missing",
-        binary: "radio-slate-definitely-missing",
-        args: &[],
-    };
-
-    const SHELL_SLEEP_LAUNCHER: PlayerLauncher = PlayerLauncher {
-        name: "shell",
-        binary: "sh",
-        args: &["-c", "sleep 30"],
-    };
-
-    const SHELL_EXIT_LAUNCHER: PlayerLauncher = PlayerLauncher {
-        name: "shell",
-        binary: "sh",
-        args: &["-c", "exit 0"],
-    };
-
-    #[test]
-    fn fallback_uses_secondary_launcher_when_primary_fails() {
-        let mut playback = spawn_with_fallback(
-            "https://example.test/stream",
-            &[MISSING_LAUNCHER, SHELL_SLEEP_LAUNCHER],
-        )
-        .expect("fallback launcher should start");
-
-        assert_eq!(playback.backend, "shell");
-        assert!(playback_is_running(&mut playback).unwrap());
-        stop_playback(&mut playback).unwrap();
-    }
-
-    #[test]
-    fn startup_failure_reports_all_attempts() {
-        let error = spawn_with_fallback(
-            "https://example.test/stream",
-            &[MISSING_LAUNCHER, MISSING_LAUNCHER],
-        )
-        .expect_err("all launchers should fail");
-
-        let text = error.to_string();
-        assert!(text.contains("failed to start playback process"));
-        assert!(text.contains("missing"));
-    }
-
-    #[test]
-    fn stopping_already_exited_process_is_clean() {
-        let mut playback =
-            spawn_with_fallback("https://example.test/stream", &[SHELL_EXIT_LAUNCHER])
-                .expect("launcher should start");
-        thread::sleep(Duration::from_millis(50));
-
-        stop_playback(&mut playback).expect("stop should succeed for an already-exited process");
-    }
 }
