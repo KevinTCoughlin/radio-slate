@@ -32,6 +32,9 @@ install:
 install-fedora:
     bash scripts/install-fedora.sh
 
+install-ubuntu:
+    bash scripts/install-ubuntu.sh
+
 install-steamos:
     bash scripts/install-steamos.sh
 

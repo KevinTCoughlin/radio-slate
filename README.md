@@ -2,7 +2,7 @@
 
 Fresh local Rust radio player for Linux desktop development.
 
-This project uses a small clean-architecture Rust layout with a CLI-first workflow and a local tray-menu path for quick playback testing on Fedora/Linux.
+This project uses a small clean-architecture Rust layout with a CLI-first workflow and a local tray-menu path for quick playback testing on Fedora, Ubuntu, and WSL2.
 
 - domain: station models and playback rules
 - application: playback orchestration and service behavior
@@ -121,6 +121,28 @@ curl -fsSL https://raw.githubusercontent.com/KevinTCoughlin/radio-slate/main/scr
 ```
 
 The script installs the Fedora build/runtime prerequisites (`cargo`, `mpv`, `ffmpeg`, GTK/AppIndicator development headers), then installs the binary into `~/.cargo/bin`.
+
+## Ubuntu / WSL install helper
+
+For Ubuntu (including WSL2 Ubuntu), first clone the repository, then run:
+
+```sh
+git clone https://github.com/KevinTCoughlin/radio-slate.git
+cd radio-slate
+bash scripts/install-ubuntu.sh
+```
+
+The helper installs apt prerequisites (`build-essential`, `clang`, `ffmpeg`,
+GTK/AppIndicator development headers, `mpv`) and bootstraps Rust via `rustup`
+if `cargo` is missing.
+
+### WSL notes
+
+- **CLI playback** works in standard WSL2 shells.
+- **Tray mode** (`--tray`) needs a Linux GUI session. On Windows 11, that
+  means WSLg enabled; otherwise use CLI mode.
+- **MPRIS/media keys** depend on a desktop session D-Bus and may be unavailable
+  in headless WSL terminals.
 
 ## GitHub Pages site
 
