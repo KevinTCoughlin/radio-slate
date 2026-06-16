@@ -20,7 +20,7 @@ jobs:
       - name: Install Rust toolchain
         run: |
           rustup toolchain install 1.96 --profile minimal
-          rustup component add rustfmt clippy --toolchain 1.96
+          rustup component add --toolchain 1.96 rustfmt clippy
 
       - name: Select Rust 1.96
         run: rustup default 1.96
