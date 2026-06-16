@@ -124,9 +124,11 @@ The script installs the Fedora build/runtime prerequisites (`cargo`, `mpv`, `ffm
 
 ## Ubuntu / WSL install helper
 
-For Ubuntu (including WSL2 Ubuntu), use:
+For Ubuntu (including WSL2 Ubuntu), first clone the repository, then run:
 
 ```sh
+git clone https://github.com/KevinTCoughlin/radio-slate.git
+cd radio-slate
 bash scripts/install-ubuntu.sh
 ```
 

@@ -13,6 +13,15 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+if [[ ! -f "$REPO_ROOT/Cargo.toml" ]]; then
+  echo "Error: This script must be run from a cloned radio-slate repository." >&2
+  echo "Example:" >&2
+  echo "  git clone https://github.com/KevinTCoughlin/radio-slate.git" >&2
+  echo "  cd radio-slate" >&2
+  echo "  bash scripts/install-ubuntu.sh" >&2
+  exit 1
+fi
+
 sudo apt-get update
 sudo apt-get install -y \
   build-essential \
