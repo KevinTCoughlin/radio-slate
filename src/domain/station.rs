@@ -99,15 +99,7 @@ impl Station {
         let url = url.trim().to_string();
         let genre = genre.trim().to_string();
 
-        if name.is_empty() || url.is_empty() || genre.is_empty() {
-            return Err("station name, url, and genre must all be set".to_string());
-        }
-
-        if !url.starts_with("http://") && !url.starts_with("https://") {
-            return Err("station url must use http or https".to_string());
-        }
-
-        Ok(Self {
+        let station = Self {
             id: StationId::new(format!(
                 "station-{}",
                 name.to_ascii_lowercase().replace(' ', "-")
@@ -115,7 +107,33 @@ impl Station {
             name,
             url,
             genre,
-        })
+        };
+        station.validate()?;
+        Ok(station)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.as_ref().trim().is_empty()
+            || self.name.trim().is_empty()
+            || self.url.trim().is_empty()
+            || self.genre.trim().is_empty()
+        {
+            return Err("station id, name, url, and genre must all be set".to_string());
+        }
+
+        if self.id.as_ref().chars().any(char::is_control)
+            || self.name.chars().any(char::is_control)
+            || self.url.chars().any(char::is_control)
+            || self.genre.chars().any(char::is_control)
+        {
+            return Err("station fields must not contain control characters".to_string());
+        }
+
+        if !self.url.starts_with("http://") && !self.url.starts_with("https://") {
+            return Err("station url must use http or https".to_string());
+        }
+
+        Ok(())
     }
 }
 
@@ -150,6 +168,11 @@ mod tests {
     #[test]
     fn station_rejects_non_http_url() {
         assert!(Station::new("Bad", "ftp://example.test/stream", "rock").is_err());
+    }
+
+    #[test]
+    fn station_rejects_control_characters() {
+        assert!(Station::new("Bad\nName", "https://example.test/stream", "rock").is_err());
     }
 
     #[test]

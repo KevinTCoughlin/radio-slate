@@ -17,6 +17,7 @@ h1 { font-size: clamp(2.6rem, 7vw, 4rem); margin: 0.25rem 0 0.75rem; }
 .button { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 0.75rem 1rem; text-decoration: none; font-weight: 600; }
 .button.primary { background: linear-gradient(135deg, #38bdf8, #8b5cf6); color: #04111d; }
 .button.secondary { border: 1px solid rgba(148, 163, 184, 0.35); color: #edf2ff; }
+.button:focus-visible { outline: 3px solid #f8fafc; outline-offset: 3px; }
 .grid-card { display: grid; gap: 1rem; margin-top: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .grid-card article { padding: 1rem; }
 pre { background: #020617; border-radius: 16px; padding: 0.9rem; overflow-x: auto; color: #bfdbfe; }

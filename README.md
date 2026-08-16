@@ -114,10 +114,12 @@ If you want to support ongoing Linux desktop tooling and open-source maintenance
 
 ## Fedora install helper
 
-For a one-command install on Fedora Linux, use the helper script:
+Clone the repository, then run the Fedora helper:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/KevinTCoughlin/radio-slate/main/scripts/install-fedora.sh | bash
+git clone https://github.com/KevinTCoughlin/radio-slate.git
+cd radio-slate
+bash scripts/install-fedora.sh
 ```
 
 The script installs the Fedora build/runtime prerequisites (`cargo`, `mpv`, `ffmpeg`, GTK/AppIndicator development headers), then installs the binary into `~/.cargo/bin`.

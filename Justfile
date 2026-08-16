@@ -17,8 +17,9 @@ package:
     cargo package --locked
 
 verify-release:
-    cargo install --path . --locked --root /tmp/radio-slate-install
-    /tmp/radio-slate-install/bin/radio-slate --list --format json
+    rm -rf target/verify-release
+    cargo install --path . --locked --root target/verify-release
+    target/verify-release/bin/radio-slate --list --format json
 
 run:
     cargo run -- --play

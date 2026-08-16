@@ -11,7 +11,7 @@ use libappindicator::{AppIndicator, AppIndicatorStatus};
 use crate::application::PlaybackService;
 use crate::domain::{PlaybackError, PlaybackState, Station, StationRepository};
 use crate::infrastructure::{
-    AudioPlayback, MprisCommand, send_now_playing, send_stopped, spawn_mpris_service,
+    AudioPlayback, MprisCommand, MprisHandle, send_now_playing, send_stopped, spawn_mpris_service,
 };
 use crate::ui::metadata::{
     StationMetadata, format_metadata, parse_bitrate_from_url, parse_stream_title,
@@ -146,6 +146,20 @@ fn next_station(state: &mut TrayState, toggle: &gtk::MenuItem, metadata: &gtk::M
     start_station_playback(state, toggle, metadata);
 }
 
+fn sync_mpris_state(state: &mut TrayState, handle: Option<&MprisHandle>) {
+    let Some(handle) = handle else {
+        return;
+    };
+
+    if is_playing(state) {
+        if let Some(station) = state.stations.get(state.station_index) {
+            handle.set_playing(&station.name, &station.url);
+        }
+    } else {
+        handle.set_stopped();
+    }
+}
+
 pub fn run_tray() -> anyhow::Result<()> {
     gtk::init().map_err(|_| anyhow::anyhow!("GTK initialization failed"))?;
 
@@ -156,7 +170,9 @@ pub fn run_tray() -> anyhow::Result<()> {
     }));
 
     // --- MPRIS D-Bus service -------------------------------------------
-    let (mpris_cmd_tx, mpris_cmd_rx) = std::sync::mpsc::sync_channel::<MprisCommand>(32);
+    // An unbounded channel keeps D-Bus callbacks non-blocking without dropping
+    // commands when clients issue bursts faster than the GTK polling interval.
+    let (mpris_cmd_tx, mpris_cmd_rx) = std::sync::mpsc::channel::<MprisCommand>();
     let mpris_handle = spawn_mpris_service(mpris_cmd_tx);
     let mpris_handle_arc = mpris_handle.map(Arc::new);
 
@@ -173,24 +189,29 @@ pub fn run_tray() -> anyhow::Result<()> {
     let state_for_click = Arc::clone(&state);
     let toggle_for_click = toggle.clone();
     let metadata_for_click = metadata.clone();
+    let mpris_for_click = mpris_handle_arc.clone();
     toggle.connect_activate(move |_| {
         if let Ok(mut state) = state_for_click.lock() {
             toggle_playback(&mut state, &toggle_for_click, &metadata_for_click);
+            sync_mpris_state(&mut state, mpris_for_click.as_deref());
         }
     });
 
     let state_for_next = Arc::clone(&state);
     let toggle_for_next = toggle.clone();
     let metadata_for_next = metadata.clone();
+    let mpris_for_next = mpris_handle_arc.clone();
     next.connect_activate(move |_| {
         if let Ok(mut state) = state_for_next.lock() {
             next_station(&mut state, &toggle_for_next, &metadata_for_next);
+            sync_mpris_state(&mut state, mpris_for_next.as_deref());
         }
     });
 
     let state_for_key = Arc::clone(&state);
     let toggle_for_key = toggle.clone();
     let metadata_for_key = metadata.clone();
+    let mpris_for_key = mpris_handle_arc.clone();
     menu.connect_key_press_event(move |_, event| {
         if let Some(key_name) = event.keyval().name().as_deref()
             && let Some(action) = shortcut_action_for_key(key_name)
@@ -204,6 +225,7 @@ pub fn run_tray() -> anyhow::Result<()> {
                     next_station(&mut state, &toggle_for_key, &metadata_for_key)
                 }
             }
+            sync_mpris_state(&mut state, mpris_for_key.as_deref());
         }
         glib::Propagation::Proceed
     });
@@ -262,5 +284,10 @@ pub fn run_tray() -> anyhow::Result<()> {
     });
 
     gtk::main();
+    if let Ok(mut state) = state.lock()
+        && let Some(mut child) = state.child.take()
+    {
+        stop_playback(&mut child);
+    }
     Ok(())
 }

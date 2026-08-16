@@ -6,7 +6,7 @@ use serde_json::json;
 use crate::application::PlaybackService;
 use crate::domain::{PlaybackState, Station, StationRepository};
 use crate::infrastructure::{
-    FileSink, HttpAudioPlayer, JsonStationRepository, StdoutSink, export_to_path, import_from_path,
+    FileSink, HttpAudioPlayer, JsonStationRepository, export_to_path, import_from_path,
 };
 use crate::ui::run_tray;
 
@@ -169,45 +169,6 @@ pub fn run() {
         return;
     }
 
-    if args.format == OutputFormat::Json {
-        let payload = json!({
-            "ready": true,
-            "stations": service.list_stations(),
-            "default_station_selected": default_selection.is_some(),
-            "default_playback_state": service.status_label(),
-            "play_requested": args.play,
-            "list_requested": args.list,
-            "status_requested": args.status,
-        });
-        println!("{payload}");
-    } else {
-        println!("radio-slate ready");
-        println!("available stations: {}", service.list_stations().len());
-        println!("default playback state: {}", service.status_label());
-    }
-
-    if args.list {
-        let stations = service.list_stations();
-        if args.format == OutputFormat::Json {
-            println!("{}", serde_json::to_string_pretty(&stations).unwrap());
-        } else {
-            for station in stations {
-                println!("{} | {} | {}", station.name, station.genre, station.url);
-            }
-        }
-    }
-
-    if args.status {
-        if args.format == OutputFormat::Json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json!({"status": service.status_label()})).unwrap()
-            );
-        } else {
-            println!("status: {}", service.status_label());
-        }
-    }
-
     if args.play {
         if default_selection.is_none() {
             eprintln!("playback failed: no stations configured");
@@ -219,10 +180,38 @@ pub fn run() {
         }
     }
 
-    if args.status || args.list || args.play {
-        let mut sink = StdoutSink::new();
-        if let Err(error) = service.emit_snapshot(PlaybackState::Stopped, None, &mut sink) {
-            eprintln!("failed to emit snapshot: {error}");
+    if args.format == OutputFormat::Json {
+        let mut payload = json!({
+            "ready": true,
+            "stations_available": service.list_stations().len(),
+            "default_station_selected": default_selection.is_some(),
+            "playback_state": service.status_label(),
+            "play_requested": args.play,
+            "list_requested": args.list,
+            "status_requested": args.status,
+        });
+
+        if args.list {
+            payload["stations"] = json!(service.list_stations());
+        }
+        if args.status {
+            payload["status"] = json!(service.status_label());
+        }
+        println!("{payload}");
+    } else {
+        println!("radio-slate ready");
+        println!("available stations: {}", service.list_stations().len());
+        println!("playback state: {}", service.status_label());
+
+        if args.list {
+            let stations = service.list_stations();
+            for station in stations {
+                println!("{} | {} | {}", station.name, station.genre, station.url);
+            }
+        }
+
+        if args.status {
+            println!("status: {}", service.status_label());
         }
     }
 }
