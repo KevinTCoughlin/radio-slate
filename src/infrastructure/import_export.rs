@@ -156,6 +156,9 @@ fn url_to_name(url: &str) -> String {
 /// Parse a JSON array of stations (used for JSON import).
 fn parse_json(content: &str) -> anyhow::Result<Vec<Station>> {
     let stations: Vec<Station> = serde_json::from_str(content)?;
+    for station in &stations {
+        station.validate().map_err(anyhow::Error::msg)?;
+    }
     Ok(stations)
 }
 
@@ -246,6 +249,12 @@ https://world.example.test/live
         let stations = parse_json(&json).unwrap();
         assert_eq!(stations.len(), 1);
         assert_eq!(stations[0].name, "Echo");
+    }
+
+    #[test]
+    fn parse_json_rejects_invalid_deserialized_station() {
+        let json = r#"[{"id":"bad","name":"Bad","url":"file:///etc/passwd","genre":"test"}]"#;
+        assert!(parse_json(json).is_err());
     }
 
     // ── Export ───────────────────────────────────────────────────────────────

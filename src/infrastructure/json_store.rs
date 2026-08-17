@@ -42,6 +42,13 @@ impl JsonStationRepository {
             // Try the versioned envelope first, then fall back to the legacy
             // plain-array format (v0 → v1 migration).
             if let Ok(data) = serde_json::from_str::<StoreData>(&content) {
+                if data.version != STORE_VERSION {
+                    anyhow::bail!(
+                        "station store at '{}' uses unsupported version {}",
+                        path.display(),
+                        data.version
+                    );
+                }
                 data.stations
             } else if let Ok(legacy) = serde_json::from_str::<Vec<Station>>(&content) {
                 legacy
@@ -61,6 +68,10 @@ impl JsonStationRepository {
             .map_err(|e| anyhow::anyhow!(e))?;
             vec![kexp]
         };
+
+        for station in &stations {
+            station.validate().map_err(anyhow::Error::msg)?;
+        }
 
         Ok(Self { path, stations })
     }
@@ -232,6 +243,15 @@ mod tests {
         let repo = JsonStationRepository::open(&path).unwrap();
         assert_eq!(repo.list().len(), 1);
         assert_eq!(repo.list()[0].name, "Legacy FM");
+    }
+
+    #[test]
+    fn rejects_unsupported_store_version() {
+        let dir = TempDir::new().unwrap();
+        let path = tmp_path(&dir);
+        fs::write(&path, r#"{"version":2,"stations":[]}"#).unwrap();
+
+        assert!(JsonStationRepository::open(&path).is_err());
     }
 
     #[test]

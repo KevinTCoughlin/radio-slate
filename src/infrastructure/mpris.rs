@@ -12,7 +12,7 @@
 //! rest of the application continues running without MPRIS support.
 
 use std::collections::HashMap;
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -128,14 +128,16 @@ impl MprisHandle {
 // D-Bus interface implementations
 // ---------------------------------------------------------------------------
 
-struct MediaPlayer2Root;
+struct MediaPlayer2Root {
+    command_tx: Sender<MprisCommand>,
+}
 
 #[interface(name = "org.mpris.MediaPlayer2")]
 impl MediaPlayer2Root {
     fn raise(&self) {}
 
     fn quit(&self) {
-        gtk::main_quit();
+        let _ = self.command_tx.send(MprisCommand::Quit);
     }
 
     #[zbus(property)]
@@ -176,7 +178,7 @@ impl MediaPlayer2Root {
 
 struct MediaPlayer2Player {
     state: Arc<Mutex<MprisSharedState>>,
-    command_tx: SyncSender<MprisCommand>,
+    command_tx: Sender<MprisCommand>,
 }
 
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
@@ -336,7 +338,7 @@ pub fn build_metadata(
 ///
 /// Returns `None` when the session D-Bus is unavailable (e.g. headless
 /// environment), letting the caller continue without MPRIS support.
-pub fn spawn_mpris_service(command_tx: SyncSender<MprisCommand>) -> Option<MprisHandle> {
+pub fn spawn_mpris_service(command_tx: Sender<MprisCommand>) -> Option<MprisHandle> {
     let state = Arc::new(Mutex::new(MprisSharedState::default()));
     let notify = Arc::new(tokio::sync::Notify::new());
 
@@ -362,6 +364,9 @@ pub fn spawn_mpris_service(command_tx: SyncSender<MprisCommand>) -> Option<Mpris
         };
 
         rt.block_on(async move {
+            let root = MediaPlayer2Root {
+                command_tx: command_tx_svc.clone(),
+            };
             let player = MediaPlayer2Player {
                 state: Arc::clone(&state_svc),
                 command_tx: command_tx_svc,
@@ -369,7 +374,7 @@ pub fn spawn_mpris_service(command_tx: SyncSender<MprisCommand>) -> Option<Mpris
 
             let conn_result = connection::Builder::session()
                 .and_then(|b| b.name(MPRIS_BUS_NAME))
-                .and_then(|b| b.serve_at(MPRIS_OBJECT_PATH, MediaPlayer2Root))
+                .and_then(|b| b.serve_at(MPRIS_OBJECT_PATH, root))
                 .and_then(|b| b.serve_at(MPRIS_OBJECT_PATH, player));
 
             let conn = match conn_result {
@@ -517,5 +522,29 @@ mod tests {
     fn metadata_includes_url_when_present() {
         let m = build_metadata("", "http://kexp.test/stream");
         assert!(m.contains_key("xesam:url"));
+    }
+
+    #[test]
+    fn mpris_callbacks_deliver_bursts_without_dropping_commands() {
+        let (command_tx, command_rx) = std::sync::mpsc::channel();
+        let root = MediaPlayer2Root {
+            command_tx: command_tx.clone(),
+        };
+        let player = MediaPlayer2Player {
+            state: Arc::new(Mutex::new(MprisSharedState::default())),
+            command_tx,
+        };
+
+        for _ in 0..100 {
+            player.play();
+            player.pause();
+            player.stop();
+            player.play_pause();
+        }
+        root.quit();
+
+        let commands: Vec<_> = command_rx.try_iter().collect();
+        assert_eq!(commands.len(), 401);
+        assert_eq!(commands.last(), Some(&MprisCommand::Quit));
     }
 }

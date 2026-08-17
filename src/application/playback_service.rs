@@ -71,7 +71,10 @@ impl<R: StationRepository, P: AudioPlayback> PlaybackService<R, P> {
             .ok_or_else(|| PlaybackError::StationNotFound(selection.station_id().clone()))?;
 
         self.playback_state = PlaybackState::Buffering(selection.clone());
-        self.player.play_station(&station)?;
+        if let Err(error) = self.player.play_station(&station) {
+            self.playback_state = PlaybackState::Stopped;
+            return Err(error);
+        }
         self.playback_state = PlaybackState::Playing(selection.clone());
         Ok(self.playback_state.clone())
     }
@@ -142,12 +145,19 @@ mod tests {
     struct StubPlayer {
         plays: Mutex<usize>,
         stops: Mutex<usize>,
+        fail_play: bool,
     }
 
     impl AudioPlayback for StubPlayer {
         fn play_station(&self, _station: &Station) -> Result<(), PlaybackError> {
             *self.plays.lock().unwrap() += 1;
-            Ok(())
+            if self.fail_play {
+                Err(PlaybackError::PlayerUnavailable(
+                    "player failed".to_string(),
+                ))
+            } else {
+                Ok(())
+            }
         }
 
         fn stop_playback(&self) -> Result<(), PlaybackError> {
@@ -205,6 +215,23 @@ mod tests {
         let err = service.select_default_station().unwrap_err();
 
         assert_eq!(err, PlaybackError::NoStationsConfigured);
+    }
+
+    #[test]
+    fn playback_service_returns_to_stopped_when_player_fails() {
+        let station = Station::new("Echo", "https://example.test/stream", "news").unwrap();
+        let repo = StubRepo {
+            stations: vec![station.clone()],
+        };
+        let player = StubPlayer {
+            fail_play: true,
+            ..StubPlayer::default()
+        };
+        let mut service = PlaybackService::new(repo, player);
+
+        service.select_station(&station.id).unwrap();
+        assert!(service.play_selected().is_err());
+        assert_eq!(service.playback_state(), PlaybackState::Stopped);
     }
 
     #[test]

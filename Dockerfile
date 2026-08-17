@@ -21,8 +21,11 @@ RUN apt-get update \
         libappindicator3-1 \
         libgtk-3-0 \
         mpv \
+    && useradd --create-home --shell /usr/sbin/nologin radio-slate \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/target/release/radio-slate /usr/local/bin/radio-slate
+
+USER radio-slate
 
 ENTRYPOINT ["/usr/local/bin/radio-slate"]
