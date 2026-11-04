@@ -24,7 +24,7 @@ include = [
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
-glib = "0.18.2"
+glib = "0.22.10"
 gtk = { version = "0.18.2", features = ["v3_24"] }
 libappindicator = "0.9"
 notify-rust = "4"
