@@ -16,7 +16,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use zbus::{connection, interface, zvariant};
+use zbus::{ObjectPath, OwnedVariant, Variant, connection, interface};
 
 use crate::domain::PlaybackState;
 
@@ -204,7 +204,7 @@ impl MediaPlayer2Player {
 
     fn seek(&self, _offset: i64) {}
 
-    fn set_position(&self, _track_id: zvariant::ObjectPath<'_>, _position: i64) {}
+    fn set_position(&self, _track_id: ObjectPath<'_>, _position: i64) {}
 
     fn open_uri(&self, _uri: &str) {}
 
@@ -229,7 +229,7 @@ impl MediaPlayer2Player {
     }
 
     #[zbus(property)]
-    fn metadata(&self) -> HashMap<String, zvariant::OwnedValue> {
+    fn metadata(&self) -> HashMap<String, OwnedVariant> {
         let s = self.state.lock().unwrap();
         build_metadata(&s.station_name, &s.station_url)
     }
@@ -293,32 +293,28 @@ impl MediaPlayer2Player {
 ///
 /// `mpris:trackid` is always present (required by spec); `xesam:title` and
 /// `xesam:url` are included when non-empty.
-pub fn build_metadata(
-    station_name: &str,
-    station_url: &str,
-) -> HashMap<String, zvariant::OwnedValue> {
-    let mut map: HashMap<String, zvariant::OwnedValue> = HashMap::new();
+pub fn build_metadata(station_name: &str, station_url: &str) -> HashMap<String, OwnedVariant> {
+    let mut map: HashMap<String, OwnedVariant> = HashMap::new();
 
     // mpris:trackid is mandatory (must be an object path, not a plain string).
-    if let Ok(path) = zvariant::ObjectPath::try_from(TRACK_ID_PATH) {
-        let static_path: zvariant::ObjectPath<'static> =
-            zvariant::ObjectPath::try_from(TRACK_ID_PATH).unwrap_or(path);
-        let val: zvariant::Value<'static> = zvariant::Value::ObjectPath(static_path);
-        if let Ok(owned) = zvariant::OwnedValue::try_from(val) {
+    if let Ok(path) = ObjectPath::try_from(TRACK_ID_PATH) {
+        let static_path: ObjectPath<'static> = ObjectPath::try_from(TRACK_ID_PATH).unwrap_or(path);
+        let val: Variant<'static> = Variant::ObjectPath(static_path);
+        if let Ok(owned) = OwnedVariant::try_from(val) {
             map.insert("mpris:trackid".to_string(), owned);
         }
     }
 
     if !station_name.is_empty() {
-        let val: zvariant::Value<'static> = zvariant::Value::Str(station_name.to_string().into());
-        if let Ok(owned) = zvariant::OwnedValue::try_from(val) {
+        let val: Variant<'static> = Variant::Str(station_name.to_string().into());
+        if let Ok(owned) = OwnedVariant::try_from(val) {
             map.insert("xesam:title".to_string(), owned);
         }
     }
 
     if !station_url.is_empty() {
-        let val: zvariant::Value<'static> = zvariant::Value::Str(station_url.to_string().into());
-        if let Ok(owned) = zvariant::OwnedValue::try_from(val) {
+        let val: Variant<'static> = Variant::Str(station_url.to_string().into());
+        if let Ok(owned) = OwnedVariant::try_from(val) {
             map.insert("xesam:url".to_string(), owned);
         }
     }
@@ -372,22 +368,17 @@ pub fn spawn_mpris_service(command_tx: Sender<MprisCommand>) -> Option<MprisHand
                 command_tx: command_tx_svc,
             };
 
-            let conn_result = connection::Builder::session()
-                .and_then(|b| b.name(MPRIS_BUS_NAME))
-                .and_then(|b| b.serve_at(MPRIS_OBJECT_PATH, root))
-                .and_then(|b| b.serve_at(MPRIS_OBJECT_PATH, player));
-
-            let conn = match conn_result {
-                Ok(b) => match b.build().await {
-                    Ok(c) => c,
-                    Err(err) => {
-                        eprintln!("radio-slate: MPRIS D-Bus connection failed: {err}");
-                        let _ = ready_tx.send(false);
-                        return;
-                    }
-                },
+            // zbus 6 builders are infallible; name and interface errors surface from build().
+            let conn = match connection::Builder::session()
+                .name(MPRIS_BUS_NAME)
+                .serve_at(MPRIS_OBJECT_PATH, root)
+                .serve_at(MPRIS_OBJECT_PATH, player)
+                .build()
+                .await
+            {
+                Ok(c) => c,
                 Err(err) => {
-                    eprintln!("radio-slate: MPRIS setup failed: {err}");
+                    eprintln!("radio-slate: MPRIS D-Bus connection failed: {err}");
                     let _ = ready_tx.send(false);
                     return;
                 }
